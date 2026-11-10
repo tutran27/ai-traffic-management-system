@@ -4,7 +4,6 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTrafficStore } from "@/store/trafficStore";
 import StreetMap         from "@/components/Map/StreetMap";
 import IntersectionPanel from "@/components/Panel/IntersectionPanel";
-import CameraCarousel    from "@/components/Panel/CameraCarousel";
 import MetricsPanel      from "@/components/Metrics/MetricsPanel";
 import MetricsTimeline   from "@/components/Metrics/MetricsTimeline";
 import SimControls       from "@/components/Simulation/SimControls";
@@ -14,9 +13,6 @@ import EmergencyPanel    from "@/components/Emergency/EmergencyPanel";
 
 export default function Dashboard() {
   useWebSocket();
-  // We hide the camera carousel as soon as the user picks an intersection
-  // (their IntersectionPanel slides in over the same right-side space).
-  const selected = useTrafficStore((s) => s.selectedIntersection);
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -40,7 +36,6 @@ export default function Dashboard() {
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 relative overflow-hidden">
           <StreetMap />
-          {!selected && <CameraCarousel />}
           <IntersectionPanel />
           <ChatWidget />
         </div>

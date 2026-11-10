@@ -1,14 +1,13 @@
-# Architecture
+# Architecture Overview
 
-High-level design of the integrated platform. See [README](README.md) for results and setup.
+High-level architecture and data flow of the AI Traffic Management & Monitoring System.
 
-## Data flow
+## Data Flow
 
 ```mermaid
 graph LR
     subgraph Simulation
         SUMO[SUMO + TraCI]
-        CARLA[CARLA bridge]
     end
 
     subgraph Perception
@@ -17,56 +16,48 @@ graph LR
 
     subgraph Backend
         FA[FastAPI + WebSocket]
-        POL[Policy engine]
-        DB[(Supabase)]
+        POL[Adaptive Policy Engine]
+        DB[(Supabase / In-Memory)]
     end
 
     subgraph Frontend
-        UI[Next.js dashboard]
-        AI[Groq assistant]
+        UI[Next.js Operator Dashboard]
+        AI[Groq LLM Assistant]
     end
 
     SUMO -->|TickData| FA
-    CARLA -->|TickData| FA
-    CARLA -->|frames| CV
-    CV -->|queue override| FA
+    CV -->|Queue & Emergency Override| FA
     FA --> POL
     POL --> FA
     FA --> DB
-    FA -->|WebSocket| UI
+    FA -->|WebSocket Stream| UI
     UI --> FA
     UI --> AI
 ```
 
-## Package responsibilities
+## Package Responsibilities
 
 | Package | Role |
 |---------|------|
-| `sumo-engine` | TraCI client, network snapshots, emergency routing |
-| `adaptive-policy` | Actuated, fixed-time, ALINEA, composite controllers |
-| `cv-pipeline` | Detection, tracking, per-camera analytics |
-| `carla-bridge` | CARLA world sync, cameras, vision manager |
-| `shared` | Pydantic types, config, Supabase client |
-| `backend` | REST + WebSocket API, simulation orchestration |
-| `frontend` | Operator dashboard and experiment UI |
+| `sumo-engine` | TraCI client, network topology, snapshot extraction, emergency vehicle routing |
+| `adaptive-policy` | Leftover-queue actuated control, fixed-time baseline, ALINEA ramp-metering, emergency preemption |
+| `cv-pipeline` | YOLOv11m detector, ByteTrack multi-object tracking, speed estimation, queue counts, red-light violations |
+| `shared` | Pydantic data models, unified configuration, constants, and database client |
+| `backend` | FastAPI REST & WebSocket streaming server, simulation life-cycle manager |
+| `frontend` | Next.js operator dashboard, simulation lab, policy playground, and live map view |
 
-## Runtime modes
+## Runtime Mode
 
-| Mode | Simulation | Perception source |
-|------|------------|-------------------|
-| SUMO | TraCI ground truth | N/A (optional CV on recordings) |
-| CARLA | Co-sim with SUMO | Ground truth + optional vision override on watched camera |
+| Mode | Simulation Engine | Perception Source |
+|------|-------------------|-------------------|
+| **SUMO** | TraCI microscopic simulation | Ground truth telemetry + optional YOLOv11m vision perception pipeline |
 
-## API surface
+## API Surface
 
-- **REST:** `http://localhost:8000/api` — simulation, signals, metrics, policy variants, experiments
-- **OpenAPI:** `http://localhost:8000/docs` (Swagger UI when backend is running)
-- **WebSocket:** `ws://localhost:8000/ws/traffic` — live `TickData` stream
+- **REST API:** `http://localhost:8000/api` — simulation controls, signals, metrics, policy variants, experiments
+- **OpenAPI Docs:** `http://localhost:8000/docs` (interactive Swagger UI)
+- **WebSocket:** `ws://localhost:8000/ws/traffic` — real-time continuous `TickData` broadcast stream
 
-## Persistence
+## Persistence Layer
 
-Supabase Postgres stores runs, per-tick metrics, policy variants, and comparison experiments. The backend batches writes asynchronously so the simulation loop never blocks on network I/O.
-
-## Related work
-
-Computer vision training pipeline and dataset capture: [OJayyusiO/dataset_capstone](https://github.com/OJayyusiO/dataset_capstone)
+PostgreSQL (via Supabase) persists simulation runs, per-tick metric logs, policy variants, and comparison experiments. Writes are asynchronously queued and buffered in memory so the high-frequency simulation loop never blocks on external network I/O. If database credentials are not configured, the system degrades seamlessly to local in-memory operation.

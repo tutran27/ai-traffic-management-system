@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { memo, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -14,9 +14,6 @@ import {
 
 import { useTrafficStore } from "@/store/trafficStore";
 
-// Sits directly below the map. Three lines on one chart, sharing the X axis
-// (simulation ticks) so the user can see how throughput, mean trip time, and
-// total halting are trending together.
 const SERIES: { key: keyof Datum; label: string; color: string; axis: "left" | "right" }[] = [
   { key: "throughput_veh_per_min", label: "Throughput (v/m)",   color: "#3b82f6", axis: "left" },
   { key: "avg_trip_time_s",        label: "Avg trip time (s)",  color: "#fbbf24", axis: "left" },
@@ -30,20 +27,23 @@ type Datum = {
   total_halting: number;
 };
 
-export default function MetricsTimeline() {
+function MetricsTimeline() {
   const history = useTrafficStore((s) => s.metricsHistory);
   const status  = useTrafficStore((s) => s.status);
   const [mode, setMode] = useState<"live" | "full">("live");
 
-  const data: Datum[] = history.map((r) => ({
-    tick: r.tick,
-    throughput_veh_per_min: r.throughput_veh_per_min,
-    avg_trip_time_s: r.avg_trip_time_s,
-    total_halting: r.total_halting,
-  }));
-  // Live view keeps the last 300 ticks (matches the store's MAX_HISTORY).
-  // Full view shows everything — only meaningful once we exceed 300 ticks.
-  const view = mode === "live" ? data.slice(-300) : data;
+  const data: Datum[] = useMemo(() => {
+    return history.map((r) => ({
+      tick: r.tick,
+      throughput_veh_per_min: r.throughput_veh_per_min,
+      avg_trip_time_s: r.avg_trip_time_s,
+      total_halting: r.total_halting,
+    }));
+  }, [history]);
+
+  const view = useMemo(() => {
+    return mode === "live" ? data.slice(-300) : data;
+  }, [mode, data]);
 
   return (
     <div className="flex-shrink-0 h-[180px] bg-[#0a0e16] border-t border-gray-800 px-4 py-2">
@@ -130,3 +130,5 @@ export default function MetricsTimeline() {
     </div>
   );
 }
+
+export default memo(MetricsTimeline);

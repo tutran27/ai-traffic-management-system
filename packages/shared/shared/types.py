@@ -157,13 +157,9 @@ class AlineaPolicyParams(BaseModel):
 
 
 class SimulationConfig(BaseModel):
-    # Top-level mode discriminator — drives entirely separate code paths.
-    # "sumo" = synthetic 3x2 arterial + policies (the comparison-runs path).
-    # "carla" = CARLA TrafficManager on Town10HD; dashboard data sourced live
-    # from CARLA actors. The two modes do NOT share state.
-    mode: Literal["sumo", "carla"] = "sumo"
+    mode: Literal["sumo"] = "sumo"
 
-    # Which SUMO network to load when mode == "sumo".
+    # Which SUMO network to load.
     network_type: Literal["arterial", "highway_metered", "combined"] = "arterial"
 
     policy_type: PolicyType = PolicyType.FIXED_TIME
@@ -185,8 +181,6 @@ class SimulationConfig(BaseModel):
     policy_params: Optional[ActuatedPolicyParams] = None  # only used when policy_type == "actuated"
     alinea_params: Optional[AlineaPolicyParams] = None    # only used when policy_type == "ramp_alinea"
 
-    # Used only when mode == "carla":
-    carla_vehicle_count: int = Field(default=80, ge=30, le=200)
 
 
 class SimulationInfo(BaseModel):

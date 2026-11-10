@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTrafficStore } from "@/store/trafficStore";
-import { api, cameraStreamUrl } from "@/lib/api";
-import type { CameraApproach, CameraStatus } from "@/lib/types";
+import { api } from "@/lib/api";
 
 interface DirTargets {
   base: number;
@@ -21,27 +20,15 @@ const DIR_ORDER = ["N", "E", "S", "W"] as const;
 
 interface Props {
   intersectionId: string;
-  onSwitchToCamera: () => void;
 }
 
-export default function PanelLive({ intersectionId, onSwitchToCamera }: Props) {
+export default function PanelLive({ intersectionId }: Props) {
   const intersections   = useTrafficStore((s) => s.intersections);
   const appendPolicyLog = useTrafficStore((s) => s.appendPolicyLog);
-  const [targets, setTargets]       = useState<TargetsResponse | null>(null);
-  const [carlaStatus, setCarlaStatus] = useState<CameraStatus | null>(null);
-  const [camApproach, setCamApproach] = useState<CameraApproach>("N");
-  const [reloadTick, setReloadTick]   = useState(0);
+  const [targets, setTargets] = useState<TargetsResponse | null>(null);
   const prevTargets = useRef<TargetsResponse | null>(null);
 
   const intersection = intersections.find((i) => i.id === intersectionId);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.getCameraStatus()
-      .then((s) => { if (!cancelled) setCarlaStatus(s as CameraStatus); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     if (!intersectionId) return;
@@ -87,7 +74,6 @@ export default function PanelLive({ intersectionId, onSwitchToCamera }: Props) {
   const maxQueue    = Math.max(q.N, q.S, q.E, q.W, 1);
   const signalChars = signal_state.split("");
   const isAdaptive  = targets?.policy === "ActuatedController";
-  const streamUrl   = cameraStreamUrl(intersectionId, camApproach);
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,52 +90,6 @@ export default function PanelLive({ intersectionId, onSwitchToCamera }: Props) {
           </div>
         ))}
       </div>
-
-      {/* Camera preview (only when CARLA connected) */}
-      {carlaStatus?.connected && (
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] text-gray-600 uppercase tracking-widest">Camera preview</span>
-            <button
-              onClick={onSwitchToCamera}
-              className="text-[9px] text-blue-500 hover:text-blue-400"
-            >
-              full view →
-            </button>
-          </div>
-          <div className="flex gap-1 mb-1.5">
-            {(["N", "E", "S", "W"] as CameraApproach[]).map((a) => (
-              <button
-                key={a}
-                onClick={() => setCamApproach(a)}
-                className={`flex-1 py-1 text-[9px] rounded border transition-colors ${
-                  a === camApproach
-                    ? "bg-[#1e3a5f] border-blue-600 text-blue-300"
-                    : "bg-[#1f2937] border-gray-700 text-gray-500"
-                }`}
-              >
-                {a}
-              </button>
-            ))}
-            <button
-              onClick={() => setReloadTick((t) => t + 1)}
-              className="px-2 bg-[#1f2937] border border-gray-700 rounded text-gray-500 hover:text-gray-300 text-xs"
-              title="Restart stream"
-            >
-              ⟳
-            </button>
-          </div>
-          <div className="bg-black border border-gray-800 rounded-md overflow-hidden aspect-video flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              key={`${camApproach}-${reloadTick}`}
-              src={streamUrl}
-              alt={`${intersectionId} ${camApproach}`}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Queue bars */}
       <div>

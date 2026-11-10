@@ -50,31 +50,16 @@ async def get_signal_targets(intersection_id: str):
     policy = sim_manager._policy
     policy_name = type(policy).__name__ if policy else "None"
 
-    # Bases come from the actuated controller's instance fields when available,
-    # so user-tuned variants are reflected. Fixed-time falls back to module defaults.
     if isinstance(policy, ActuatedController):
-        base_by_dir = policy.base_green_by_dir
+        directions = policy.get_targets(intersection_id)
     else:
-        base_by_dir = BASE_GREEN_BY_DIR
-
-    # For actuated, derive per-direction target from the controller's plan
-    # (one group can serve multiple directions; all members share the target).
-    target_by_dir = {d: base_by_dir[d] for d in DIRECTIONS}
-    if isinstance(policy, ActuatedController):
-        tr = policy._trackers.get(intersection_id)
-        if tr is not None:
-            for gi, g in enumerate(policy.plan.groups):
-                for d in g.member_dirs:
-                    target_by_dir[d] = tr.targets[gi]
-
-    directions = {}
-    for d in DIRECTIONS:
-        base = base_by_dir[d]
-        target = target_by_dir[d]
-        directions[d] = {
-            "base": round(base, 1),
-            "target": round(target, 1),
-            "delta": round(target - base, 1),
+        directions = {
+            d: {
+                "base": round(BASE_GREEN_BY_DIR.get(d, 0.0), 1),
+                "target": round(BASE_GREEN_BY_DIR.get(d, 0.0), 1),
+                "delta": 0.0,
+            }
+            for d in DIRECTIONS
         }
 
     return {

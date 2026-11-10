@@ -1,6 +1,5 @@
 """Lane polygons + forbidden-line (red-light violation) logic + per-camera region
-storage. Geometry ported faithfully from the capstone analytics pipeline.
-
+storage. 
 Regions are pixel-space, defined per camera:
     lanes:           [{"id": "lane1", "polygon": [[x, y], ...]}]
     forbidden_lines: [{"id": "stop1", "points": [[x1, y1], [x2, y2]]}]

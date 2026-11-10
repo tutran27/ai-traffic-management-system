@@ -1,6 +1,6 @@
 """Per-approach vision analytics: speed + queue + violations for one camera.
 
-Wraps the YOLOv11m detector's tracking output with the capstone analytics
+Wraps the YOLOv11m detector's tracking output with analytics
 primitives (homography world-projection + smoothed per-track speed + stationary
 queue detection + per-lane queue + red-light violations). One ApproachAnalyzer
 instance handles one camera (one approach of one intersection); it owns its own
@@ -29,11 +29,8 @@ import numpy as np
 from .regions import ViolationDetector, compute_queue_counts, point_in_polygon
 from .yolov11_detector import YoloV11Detector
 
-# Queue defaults (overridable; mirror the capstone analytics_config `queue:` block).
-# 7.2 km/h (2 m/s) is the capstone convention — keeps our queue definition identical
-# across our own analytics and this integration. (TRaffic's ground-truth carla_snapshot
-# uses 3.5 m/s to catch CARLA TM cars creeping at reds; if their sim undercounts with
-# 2 m/s, raise this per-scenario — it's the one knob.)
+# Queue defaults (overridable; mirror analytics_config `queue:` block).
+# 7.2 km/h (2 m/s) standard stationary threshold for vehicle queue detection.
 DEFAULT_QUEUE_SPEED_KMH = 7.2            # 2 m/s
 DEFAULT_QUEUE_MIN_STATIONARY_SECONDS = 2.0
 
@@ -202,7 +199,7 @@ class ApproachAnalyzer:
         """Process one frame; returns queue/violation analytics for this approach.
 
         light_state: 'red'|'yellow'|'green'|'unknown' for the approach this frame
-        (from the CARLA traffic light). Violations only fire on 'red'.
+        Violations only fire on 'red'.
         """
         self._frame_idx += 1
         self._ensure_logs()

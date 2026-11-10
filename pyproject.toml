@@ -1,7 +1,7 @@
 [project]
 name = "traffic-management-system"
 version = "0.1.0"
-description = "AI-based traffic management and monitoring system"
+description = "AI-based smart traffic monitoring and management system"
 requires-python = ">=3.9"
 
 [tool.ruff]
@@ -12,10 +12,14 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
+pythonpath = [
+    "packages/shared",
+    "packages/adaptive-policy",
+    "packages/sumo-engine",
+    "packages/cv-pipeline",
+    "backend",
+]
 testpaths = [
-    "packages/sumo-engine/tests",
-    "packages/cv-pipeline/tests",
     "packages/adaptive-policy/tests",
-    "packages/shared/tests",
     "backend/smoke_tests",
 ]

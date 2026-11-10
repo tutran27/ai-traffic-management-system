@@ -1,11 +1,6 @@
-"""Simulation orchestration service — drives one of two modes:
+"""Simulation orchestration service — drives SUMO simulation (TraCI + adaptive policies).
 
-  * mode == "sumo"  : the synthetic 3x2 arterial flow (TraCI + our policies)
-  * mode == "carla" : CARLA TrafficManager on Town10HD; dashboard data from
-                      live CARLA actors (no SUMO at all)
-
-Both modes broadcast TickData on the same WebSocket so the dashboard widgets
-don't need to care which engine is producing it.
+Broadcasts TickData on WebSocket to dashboard widgets.
 """
 
 from __future__ import annotations
@@ -81,10 +76,7 @@ class SimulationManager:
 
         await db_service.start_run(self._run_id, config)
 
-        if config.mode == "carla":
-            await self._start_carla(config)
-        else:
-            await self._start_sumo(config)
+        await self._start_sumo(config)
 
     # ------------------------------------------------------------------ #
     # SUMO mode — synthetic arterial, policy comparison work.
@@ -403,26 +395,38 @@ class SimulationManager:
                         print(f"Race finished at tick {self._tick}, sim_time {self._sim_time}s")
                         break
 
-                self._sim_time = await asyncio.to_thread(self._traci_client.step)
+                self._sim_time = await asyncio.wait_for(
+                    asyncio.to_thread(self._traci_client.step),
+                    timeout=5.0
+                )
                 self._tick += 1
 
                 if self._config.race_mode:
                     from sumo_engine.snapshot import extract_race_tick
-                    sim_time, intersections = await asyncio.to_thread(
-                        extract_race_tick,
-                        self._tick,
-                        self._trip_tracker,
-                        self._tracker,
+                    sim_time, intersections = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            extract_race_tick,
+                            self._tick,
+                            self._trip_tracker,
+                            self._tracker,
+                        ),
+                        timeout=5.0
                     )
                     if self._policy:
                         decision = self._policy.decide(intersections, sim_time)
                         if decision.commands:
                             from sumo_engine.signals import apply_commands
-                            await asyncio.to_thread(apply_commands, decision.commands)
+                            await asyncio.wait_for(
+                                asyncio.to_thread(apply_commands, decision.commands),
+                                timeout=2.0
+                            )
                 else:
                     from sumo_engine.snapshot import extract_tick_data
-                    tick_data = await asyncio.to_thread(
-                        extract_tick_data, self._tick, self._tracker, self._trip_tracker
+                    tick_data = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            extract_tick_data, self._tick, self._tracker, self._trip_tracker
+                        ),
+                        timeout=5.0
                     )
                     self._last_tick_data = tick_data
                     self._maybe_log_cycle_wrap(tick_data)
@@ -444,7 +448,10 @@ class SimulationManager:
                     all_commands = list(commands_map.values())
                     if all_commands:
                         from sumo_engine.signals import apply_commands
-                        await asyncio.to_thread(apply_commands, all_commands)
+                        await asyncio.wait_for(
+                            asyncio.to_thread(apply_commands, all_commands),
+                            timeout=2.0
+                        )
 
                     await ws_manager.broadcast_json(tick_data.model_dump())
                     await asyncio.sleep(tick_interval)
@@ -461,6 +468,10 @@ class SimulationManager:
                     pass
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            with open("sim_error.log", "a", encoding="utf-8") as f:
+                f.write(f"Tick {self._tick} error: {e}\n{traceback.format_exc()}\n")
             print(f"SUMO simulation error: {e}")
         finally:
             # Close TraCI BEFORE flipping status to STOPPED so the experiment
@@ -483,80 +494,6 @@ class SimulationManager:
                 self._status = SimulationStatus.STOPPED
 
     # ------------------------------------------------------------------ #
-    # CARLA mode — TrafficManager + dashboard fed from CARLA actors.
-    # ------------------------------------------------------------------ #
-    async def _start_carla(self, config: SimulationConfig) -> None:
-        from .carla_service import carla_bridge
-
-        result = await carla_bridge.ensure_connected()
-        if not result.connected:
-            self._status = SimulationStatus.STOPPED
-            raise RuntimeError(
-                f"CARLA server not reachable on localhost:2000 ({result.error or 'unknown'})."
-            )
-
-        spawned = await carla_bridge.spawn_traffic(config.carla_vehicle_count)
-        print(f"[carla] spawned {spawned}/{config.carla_vehicle_count} TrafficManager vehicles")
-
-        self._task = asyncio.create_task(self._carla_tick_loop())
-
-    async def _carla_tick_loop(self) -> None:
-        """Polls CARLA actor state ~10 Hz and broadcasts a TickData each tick.
-
-        No SUMO / TraCI involvement. Stop is signalled via self._status.
-        """
-        from .carla_service import carla_bridge
-
-        tick_interval = 0.1   # 10 Hz is plenty for the dashboard
-        start_real = time.time()
-        consecutive_errors = 0
-        try:
-            while self._status != SimulationStatus.STOPPED:
-                if self._status == SimulationStatus.PAUSED:
-                    await asyncio.sleep(tick_interval)
-                    continue
-
-                self._tick += 1
-                self._sim_time = time.time() - start_real
-
-                # Don't let a dead CARLA hang the tick loop — bound the snapshot
-                # call and bail after a few consecutive failures so the
-                # dashboard sees an honest stop instead of "failed to fetch".
-                try:
-                    tick_data = await asyncio.wait_for(
-                        carla_bridge.snapshot(self._tick, self._sim_time),
-                        timeout=2.0,
-                    )
-                    consecutive_errors = 0
-                except (asyncio.TimeoutError, Exception) as snap_err:
-                    consecutive_errors += 1
-                    print(f"[carla] snapshot failed ({consecutive_errors}): {snap_err}")
-                    tick_data = None
-                    if consecutive_errors >= 5:
-                        print("[carla] giving up — CARLA appears to have crashed")
-                        break
-
-                if tick_data is not None:
-                    self._last_tick_data = tick_data
-                    self._maybe_log_cycle_wrap(tick_data)
-                    try:
-                        await ws_manager.broadcast_json(tick_data.model_dump())
-                    except Exception as e:
-                        print(f"[carla] ws broadcast failed: {e}")
-
-                await asyncio.sleep(tick_interval)
-        except Exception as e:
-            print(f"CARLA simulation error: {e}")
-        finally:
-            try:
-                await carla_bridge.shutdown()
-            except Exception as carla_err:
-                print(f"CARLA shutdown error: {carla_err}")
-            await db_service.end_run(self._run_id, self._tick)
-            if self._status != SimulationStatus.STOPPED:
-                self._status = SimulationStatus.STOPPED
-
-    # ------------------------------------------------------------------ #
     # Lifecycle
     # ------------------------------------------------------------------ #
     async def stop(self) -> None:
@@ -572,7 +509,7 @@ class SimulationManager:
         # end_run is called inside the tick loop's finally block when the task
         # is cancelled above, so we don't duplicate it here.
 
-        # SUMO cleanup (no-op in CARLA mode)
+        # SUMO cleanup
         if self._traci_client and self._traci_client.connected:
             await asyncio.to_thread(self._traci_client.close)
         self._traci_client = None
@@ -580,31 +517,14 @@ class SimulationManager:
         self._tracker = None
         self._trip_tracker = None
 
-        # CARLA cleanup (no-op in SUMO mode — bridge.shutdown is idempotent)
-        try:
-            from .carla_service import carla_bridge
-            await carla_bridge.shutdown()
-        except Exception as e:
-            print(f"CARLA shutdown error on stop: {e}")
 
     def pause(self) -> None:
-        was_running = self._status == SimulationStatus.RUNNING
         self._status = SimulationStatus.PAUSED
-        # In CARLA mode, also freeze the world (TM cars + traffic lights)
-        # so it doesn't keep moving while the dashboard says "paused".
-        # SUMO mode's tick loop already idles cleanly when status==PAUSED
-        # because TraCI doesn't auto-step.
-        if was_running and self._config and self._config.mode == "carla":
-            from .carla_service import carla_bridge
-            asyncio.create_task(carla_bridge.pause())
 
     def resume(self) -> None:
         if self._status != SimulationStatus.PAUSED:
             return
         self._status = SimulationStatus.RUNNING
-        if self._config and self._config.mode == "carla":
-            from .carla_service import carla_bridge
-            asyncio.create_task(carla_bridge.resume())
 
 
 sim_manager = SimulationManager()

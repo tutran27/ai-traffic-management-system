@@ -133,35 +133,3 @@ export function CarsField({
     </label>
   );
 }
-
-export function CarlaCarsField({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="block">
-      <div className="flex items-center justify-between">
-        <span className={LABEL}>CARLA Vehicles</span>
-        <span className="text-xs font-mono text-gray-300">{value}</span>
-      </div>
-      <input
-        type="range"
-        min={30}
-        max={200}
-        step={10}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value, 10))}
-        disabled={disabled}
-        className="w-full mt-1"
-      />
-      <span className="text-[10px] text-gray-500">
-        TrafficManager autopilot — keep ≤120 on a 1660 Ti.
-      </span>
-    </label>
-  );
-}

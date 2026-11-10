@@ -23,8 +23,6 @@ You can explore the dashboard and run SUMO simulations **without** Supabase or G
 |---------|----------------|
 | Persist runs / Simulation Lab history | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | AI assistant chat widget | `GROQ_API_KEY` |
-| CARLA photorealistic mode | CARLA server on `localhost:2000` |
-| Vision overlay on cameras | CARLA + `packages/cv-pipeline/models/best.pt` (included in repo) |
 
 ## Quick smoke test
 
@@ -56,4 +54,3 @@ Runs six seeded races (3 demand profiles × 2 policies). Without Supabase, poll 
 | `SUMO_HOME` not set | Export path to your SUMO install before starting the backend |
 | Simulation fails to start | Run `python scripts/generate_network.py` once |
 | WebSocket disconnected | Ensure backend is on port 8000; frontend defaults to `localhost:8000` |
-| CV / CARLA unavailable | Use **SUMO** mode in sim controls — no CARLA required |

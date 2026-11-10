@@ -1,5 +1,6 @@
 "use client";
 
+import React, { memo } from "react";
 import { useTrafficStore } from "@/store/trafficStore";
 import type { IntersectionState, VehicleState } from "@/lib/types";
 import IntersectionNode from "./IntersectionNode";
@@ -71,26 +72,28 @@ function vehicleToSvg(v: VehicleState): { x: number; y: number } {
   return { x, y: toSvgY(v.y) };
 }
 
-function VehicleDots({ vehicles }: { vehicles: VehicleState[] }) {
+const VehicleDots = memo(function VehicleDots({ vehicles }: { vehicles: VehicleState[] }) {
   if (vehicles.length > 1500) return null;
   return (
     <>
       {vehicles.map((v) => {
         const { x, y } = vehicleToSvg(v);
+        const isEmg = String(v.type) === "emergency";
         return (
           <circle
             key={v.id}
             cx={x}
             cy={y}
-            r={2.2}
-            fill={String(v.type) === "emergency" ? "#ef4444" : "#3b82f6"}
-            fillOpacity={0.78}
+            r={isEmg ? 3.2 : 2.2}
+            fill={isEmg ? "#ef4444" : "#3b82f6"}
+            fillOpacity={0.85}
+            style={{ transition: "cx 95ms linear, cy 95ms linear" }}
           />
         );
       })}
     </>
   );
-}
+});
 
 function makePlaceholder(id: string): IntersectionState {
   return {

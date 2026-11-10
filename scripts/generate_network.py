@@ -207,12 +207,14 @@ def rewrite_tls_to_split_phase(net_file: Path) -> None:
     root = tree.getroot()
 
     link_in_edge: dict = {}
+    link_dir: dict = {}
     for conn in root.findall("connection"):
         tl_id = conn.get("tl")
         if tl_id is None:
             continue
         idx = int(conn.get("linkIndex"))
         link_in_edge[(tl_id, idx)] = conn.get("from")
+        link_dir[(tl_id, idx)] = conn.get("dir")
 
     rewritten = 0
     for tl in root.findall("tlLogic"):
@@ -242,20 +244,27 @@ def rewrite_tls_to_split_phase(net_file: Path) -> None:
                     chars[idx] = "y"
                 return "".join(chars)
             for idx in green_indices:
-                chars[idx] = "G"
+                ldir = link_dir.get((tl_id, idx), "s")
+                chars[idx] = "g" if ldir == "l" else "G"
             return "".join(chars)
 
-        prev_dir = None
-        for d in PHASE_ORDER:
-            greens = dir_links[d]
-            if prev_dir is not None:
-                yellow_state = _state([], dir_links[prev_dir], yellow_for_prev=True)
+        # Opposite directions paired together: N & S, then E & W
+        PAIRS = [["N", "S"], ["E", "W"], ["N", "S"], ["E", "W"]]
+        DURS = [GREEN_DURATION_BY_DIR["N"], GREEN_DURATION_BY_DIR["E"], GREEN_DURATION_BY_DIR["S"], GREEN_DURATION_BY_DIR["W"]]
+
+        prev_greens = None
+        for pair_dirs, dur in zip(PAIRS, DURS):
+            pair_greens = []
+            for d in pair_dirs:
+                pair_greens.extend(dir_links[d])
+            if prev_greens is not None:
+                yellow_state = _state([], prev_greens, yellow_for_prev=True)
                 ET.SubElement(tl, "phase", duration=str(YELLOW_DURATION), state=yellow_state)
                 ET.SubElement(tl, "phase", duration=str(ALL_RED_DURATION), state="r" * num_links)
-            ET.SubElement(tl, "phase", duration=str(GREEN_DURATION_BY_DIR[d]), state=_state(greens))
-            prev_dir = d
+            ET.SubElement(tl, "phase", duration=str(dur), state=_state(pair_greens))
+            prev_greens = pair_greens
 
-        yellow_state = _state([], dir_links[prev_dir], yellow_for_prev=True)
+        yellow_state = _state([], prev_greens, yellow_for_prev=True)
         ET.SubElement(tl, "phase", duration=str(YELLOW_DURATION), state=yellow_state)
         ET.SubElement(tl, "phase", duration=str(ALL_RED_DURATION), state="r" * num_links)
         rewritten += 1
@@ -462,67 +471,7 @@ def generate_sumo_configs() -> None:
         print(f"  {cfg_file.name}")
 
 
-def generate_carla_network() -> None:
-    """Derive a SUMO network from CARLA Town03's OpenDRIVE.
-
-    Requires env var CARLA_ROOT pointing at the CARLA server root
-    (e.g., C:/CARLA_0.9.15). Uses SUMO's netconvert with --opendrive-files.
-
-    Output: packages/sumo-engine/networks/carla_town03.net.xml.
-
-    After running this you still need to:
-      1. Hand-pick 6 junctions in the converted net and fill in
-         packages/sumo-engine/configs/carla_junctions.json.
-      2. Regenerate route files on the new topology (not yet automated —
-         Town03's road graph differs from our synthetic arterial, so routes
-         have to be authored per-junction).
-    """
-    carla_root = os.environ.get("CARLA_ROOT")
-    if not carla_root:
-        print("  ERROR: set CARLA_ROOT to your CARLA server install path, e.g.")
-        print("         $env:CARLA_ROOT = 'C:/CARLA_0.9.15'")
-        return
-    xodr = Path(carla_root) / "CarlaUE4" / "Content" / "Carla" / "Maps" / "OpenDrive" / "Town03.xodr"
-    if not xodr.exists():
-        print(f"  ERROR: Town03.xodr not found at {xodr}")
-        return
-
-    out = NETWORK_DIR / "carla_town03.net.xml"
-    cmd = [
-        "netconvert",
-        "--opendrive-files", str(xodr),
-        "-o", str(out),
-        "--geometry.remove", "true",
-        "--ramps.guess", "false",
-    ]
-    try:
-        subprocess.run(cmd, check=True)
-    except Exception as e:
-        print(f"  netconvert failed: {e}")
-        return
-
-    print(f"  wrote {out}")
-    print("  NEXT: edit packages/sumo-engine/configs/carla_junctions.json with")
-    print("        the real junction ids + camera transforms for 6 junctions.")
-
-
 def main(argv: list[str] | None = None) -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Generate SUMO networks")
-    parser.add_argument(
-        "--map",
-        choices=["arterial", "carla"],
-        default="arterial",
-        help="arterial = 3x2 synthetic grid (default); carla = derive from Town03 OpenDRIVE",
-    )
-    args = parser.parse_args(argv)
-
-    if args.map == "carla":
-        print("=== CARLA-derived Network Generation ===\n")
-        generate_carla_network()
-        return
-
     print("=== SUMO Network Generation ===\n")
 
     print("Step 1: Building network...")

@@ -35,21 +35,42 @@ def _classify_vehicle_type(vtype_id: str) -> VehicleType:
     return VehicleType.CAR
 
 
-def get_vehicle_states() -> list[VehicleState]:
-    """Extract state of all active vehicles."""
+def get_vehicle_states(max_display: int = 400) -> tuple[list[VehicleState], int]:
+    """Extract state of active vehicles.
+
+    Returns (display_vehicles, total_vehicle_count).
+    Limits display vehicles to `max_display` to prevent TraCI socket bottleneck
+    and massive WebSocket JSON payloads, while keeping all emergency vehicles prioritized.
+    """
+    all_ids = traci.vehicle.getIDList()
+    total_count = len(all_ids)
+
+    if total_count <= max_display:
+        selected_ids = all_ids
+    else:
+        # Prioritize emergency vehicles, sample evenly across standard traffic
+        step = max(1, total_count // max_display)
+        selected_ids = []
+        for i, veh_id in enumerate(all_ids):
+            vtype = traci.vehicle.getTypeID(veh_id).lower()
+            if "emergency" in vtype or "ambulance" in vtype or "fire" in vtype or i % step == 0:
+                selected_ids.append(veh_id)
+                if len(selected_ids) >= max_display:
+                    break
+
     vehicles = []
-    for veh_id in traci.vehicle.getIDList():
+    for veh_id in selected_ids:
         x, y = traci.vehicle.getPosition(veh_id)
         vehicles.append(VehicleState(
             id=veh_id,
             type=_classify_vehicle_type(traci.vehicle.getTypeID(veh_id)),
-            x=x,
-            y=y,
-            speed=traci.vehicle.getSpeed(veh_id),
+            x=round(x, 1),
+            y=round(y, 1),
+            speed=round(traci.vehicle.getSpeed(veh_id), 1),
             lane_id=traci.vehicle.getLaneID(veh_id),
-            accumulated_wait_s=traci.vehicle.getAccumulatedWaitingTime(veh_id),
+            accumulated_wait_s=round(traci.vehicle.getAccumulatedWaitingTime(veh_id), 1),
         ))
-    return vehicles
+    return vehicles, total_count
 
 
 def get_intersection_states() -> list[IntersectionState]:
@@ -114,9 +135,14 @@ def get_metrics(
     vehicles: list[VehicleState],
     tracker: Optional[ControlDelayTracker] = None,
     trip_tracker: Optional[TripTimeTracker] = None,
+    total_vehicles_count: Optional[int] = None,
 ) -> MetricsSnapshot:
     """Compute global metrics from current vehicle states."""
+    sample_size = len(vehicles)
+    total_veh = total_vehicles_count if total_vehicles_count is not None else sample_size
     halting = sum(1 for v in vehicles if v.speed < 0.1)
+    # Scale halting if sampled
+    scaled_halting = int(round(halting * (total_veh / sample_size))) if sample_size > 0 else 0
     total_wait = sum(v.accumulated_wait_s for v in vehicles)
 
     avg_cd = tracker.avg_control_delay_s if tracker else 0.0
@@ -124,18 +150,14 @@ def get_metrics(
     avg_trip = trip_tracker.avg_trip_time_s if trip_tracker else 0.0
     trips = trip_tracker.completed_trips if trip_tracker else 0
 
-    # Throughput = cumulative completed trips per minute of sim time.
-    # NOTE: We deliberately do NOT use traci.simulation.getArrivedNumber()
-    # here — that returns the count for the LAST step only (typically 0 or
-    # 1), which gave nonsensical values like 0.01 veh/min instead of ~33.
     sim_time = max(traci.simulation.getTime(), 1.0)
 
     return MetricsSnapshot(
-        total_vehicles=len(vehicles),
+        total_vehicles=total_veh,
         total_completed=trips,
-        avg_delay_s=round(total_wait / len(vehicles), 2) if vehicles else 0.0,
+        avg_delay_s=round(total_wait / sample_size, 2) if sample_size else 0.0,
         throughput_veh_per_min=round(trips * 60 / sim_time, 2),
-        total_halting=halting,
+        total_halting=scaled_halting,
         avg_control_delay_s=round(avg_cd, 2),
         control_delay_samples=cd_samples,
         avg_trip_time_s=round(avg_trip, 2),
@@ -178,9 +200,9 @@ def extract_tick_data(
     if trip_tracker is not None:
         trip_tracker.update(sim_time)
 
-    vehicles = get_vehicle_states()
+    vehicles, total_veh_count = get_vehicle_states()
     intersections = get_intersection_states()
-    metrics = get_metrics(vehicles, tracker, trip_tracker)
+    metrics = get_metrics(vehicles, tracker, trip_tracker, total_vehicles_count=total_veh_count)
 
     from .emergency import get_active_emergency_vehicles
     emergency = EmergencyState(active=get_active_emergency_vehicles())

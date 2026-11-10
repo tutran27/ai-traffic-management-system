@@ -71,7 +71,7 @@ export interface TickData {
   camera_frame_url: string | null;
 }
 
-export type SimulationMode = "sumo" | "carla";
+export type SimulationMode = "sumo";
 export type NetworkType = "arterial" | "highway_metered" | "combined";
 
 export interface ActuatedPolicyParams {
@@ -201,7 +201,6 @@ export interface SimulationConfig {
   dominant_direction: DominantDirection;
   race_mode?: boolean;
   gui?: boolean;
-  carla_vehicle_count?: number;
   policy_params?: ActuatedPolicyParams;
   alinea_params?: AlineaPolicyParams;
   // Combined-network only: independent ramp-meter policy. When omitted,
@@ -264,40 +263,6 @@ export interface ComparisonExperiment {
   created_at: number;
 }
 
-export type CameraApproach = "N" | "E" | "S" | "W";
-
-export interface CameraEntry {
-  approach: CameraApproach;
-  // Optional — populated when listCameras is called with detail=full.
-  x?: number;
-  y?: number;
-  z?: number;
-  pitch?: number;
-  yaw?: number;
-  roll?: number;
-  width?: number;
-  height?: number;
-  fov?: number;
-}
-
-export interface IntersectionCameras {
-  intersection_id: string;
-  carla_junction_id: number;
-  cx: number;
-  cy: number;
-  cameras: CameraEntry[];
-}
-
-export interface CameraListResponse {
-  intersections: IntersectionCameras[];
-}
-
-export interface CameraStatus {
-  connected: boolean;
-  town: string | null;
-  server_version: string | null;
-  error: string | null;
-}
 
 export interface ExperimentUpdateMessage {
   type: "experiment_update";

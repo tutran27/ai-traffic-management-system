@@ -1,4 +1,4 @@
-"""YOLOv11m vehicle detection + tracking (custom 7-class CARLA-trained model).
+"""YOLOv11m vehicle detection + tracking (custom 7-class trained model).
 
 Drop-in replacement for the YOLOS detector: exposes the same `Detection`
 dataclass and a `detect()` method with the same signature, so existing call
@@ -8,7 +8,7 @@ the speed/queue analytics that feed the adaptive policy.
 
 Unlike YOLOS (general COCO classes), this model distinguishes emergency
 vehicles (ambulance / police_car / fire_truck), which is the whole point of the
-custom CARLA dataset.
+custom dataset.
 
 Note on tracking: ByteTrack state persists per detector instance. For multiple
 cameras, give each camera its OWN YoloV11Detector instance so their track-ID
@@ -22,8 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .classes import is_emergency, vehicle_type_for
-from .yolos_detector import Detection
+from .classes import Detection, is_emergency, vehicle_type_for
 
 # Bundled weights — packages/cv-pipeline/models/best.pt
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "best.pt"

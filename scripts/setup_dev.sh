@@ -23,7 +23,6 @@ pip install -e packages/shared
 pip install -e packages/sumo-engine
 pip install -e packages/adaptive-policy
 pip install -e packages/cv-pipeline
-pip install -e packages/carla-bridge
 pip install -e backend
 
 # Install development tools

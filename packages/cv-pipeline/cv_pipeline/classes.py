@@ -1,12 +1,18 @@
-"""Mapping from our custom 7-class model to TRaffic's VehicleType taxonomy.
-
-The CARLA-trained YOLOv11m model emits 7 classes. TRaffic's shared VehicleType
-enum has 5 values (car/truck/bus/motorcycle/emergency). This module maps between
-them. Values are plain strings (matching VehicleType member values) so this
-module has no dependency on `shared` — callers do `VehicleType(vehicle_type_for(name))`.
-"""
+"""Mapping from our custom 7-class model to vehicle taxonomy and detection structures."""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class Detection:
+    """Single object detection result."""
+
+    class_name: str
+    confidence: float
+    bbox: tuple[float, float, float, float]  # (x1, y1, x2, y2)
+
 
 # Class names as emitted by the custom model (see models/best.pt training set).
 MODEL_CLASS_NAMES = (
@@ -16,7 +22,7 @@ MODEL_CLASS_NAMES = (
 # The three classes our model can distinguish that map to an emergency vehicle.
 EMERGENCY_CLASSES = frozenset({"ambulance", "police_car", "fire_truck"})
 
-# Model class name -> TRaffic VehicleType *value*.
+# Model class name -> VehicleType value.
 CLASS_TO_VEHICLE_TYPE = {
     "car": "car",
     "bus": "bus",
@@ -29,7 +35,7 @@ CLASS_TO_VEHICLE_TYPE = {
 
 
 def vehicle_type_for(class_name: str) -> str:
-    """Map a model class name to a TRaffic VehicleType value (default 'car')."""
+    """Map a model class name to a VehicleType value (default 'car')."""
     return CLASS_TO_VEHICLE_TYPE.get(class_name, "car")
 
 

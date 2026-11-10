@@ -1,7 +1,6 @@
 "use client";
 
-import { Line, LineChart, ResponsiveContainer } from "recharts";
-
+import React, { memo } from "react";
 import { useTrafficStore, type MetricsHistoryRow } from "@/store/trafficStore";
 
 type HistoryKey = Exclude<keyof MetricsHistoryRow, "tick" | "sim_time">;
@@ -12,10 +11,7 @@ interface MetricCardProps {
   unit?: string;
   color?: "white" | "green" | "amber" | "blue";
   span2?: boolean;
-  // Optional sparkline + trend. When historyKey is set we read the last N
-  // rows from the store and render a 60-tick sparkline + an up/down arrow.
   historyKey?: HistoryKey;
-  // Which direction counts as "better" for the trend arrow color.
   lowerIsBetter?: boolean;
 }
 
@@ -26,8 +22,7 @@ const colorMap = {
   blue:  "text-blue-400",
 };
 
-// Trend = mean of last 10 ticks vs mean of the 11..30-tick window. Returns
-// a signed % change (positive = went up). Null if not enough samples.
+// Trend = mean of last 10 ticks vs mean of the 11..30-tick window.
 function trendPct(history: MetricsHistoryRow[], key: HistoryKey): number | null {
   if (history.length < 12) return null;
   const recent = history.slice(-10);
@@ -41,7 +36,7 @@ function trendPct(history: MetricsHistoryRow[], key: HistoryKey): number | null 
   return ((r - p) / Math.abs(p)) * 100;
 }
 
-function TrendArrow({
+const TrendArrow = memo(function TrendArrow({
   history,
   historyKey,
   lowerIsBetter,
@@ -61,9 +56,10 @@ function TrendArrow({
       {arrow}{Math.abs(t).toFixed(0)}%
     </span>
   );
-}
+});
 
-function Sparkline({
+// Lightweight pure SVG sparkline — replaces heavy Recharts ResponsiveContainer instances
+const Sparkline = memo(function Sparkline({
   history,
   historyKey,
   color,
@@ -72,33 +68,56 @@ function Sparkline({
   historyKey: HistoryKey;
   color: string;
 }) {
-  const data = history.slice(-60).map((r, i) => ({ i, v: r[historyKey] as number }));
-  if (data.length < 2) return <div className="h-[18px]" />;
+  const slice = history.slice(-50);
+  if (slice.length < 2) return <div className="h-[18px]" />;
+
+  const values = slice.map((r) => r[historyKey] as number);
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const range = max - min;
+  const width = 100;
+  const height = 18;
+  const pad = 2;
+  const usableH = height - pad * 2;
+
+  const points = values
+    .map((v, i) => {
+      const x = ((i / (values.length - 1)) * width).toFixed(1);
+      const y = (height - pad - ((v - min) / range) * usableH).toFixed(1);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
   return (
     <div className="h-[18px] -mx-1 mt-1">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <Line
-            type="monotone"
-            dataKey="v"
-            stroke={color}
-            strokeWidth={1.1}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-full overflow-visible"
+        preserveAspectRatio="none"
+      >
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+      </svg>
     </div>
   );
-}
+});
 
-function MetricCard({
+const MetricCard = memo(function MetricCard({
   label, value, unit, color = "white", span2,
   historyKey, lowerIsBetter = true,
 }: MetricCardProps) {
   const history = useTrafficStore((s) => s.metricsHistory);
-  // Per-color sparkline tone — matches the value color so the eye groups
-  // them visually.
+
   const sparkColor =
     color === "green" ? "#34d399" :
     color === "amber" ? "#fbbf24" :
@@ -126,7 +145,7 @@ function MetricCard({
       {historyKey && <Sparkline history={history} historyKey={historyKey} color={sparkColor} />}
     </div>
   );
-}
+});
 
 export default function MetricsPanel() {
   const metrics = useTrafficStore((s) => s.metrics);
@@ -148,7 +167,7 @@ export default function MetricsPanel() {
           label="Vehicles"
           value={fmtI(metrics.total_vehicles)}
           historyKey="total_vehicles"
-          lowerIsBetter={false}  // more vehicles = network is busy, not bad
+          lowerIsBetter={false}
         />
         <MetricCard
           label="Completed"

@@ -1,15 +1,7 @@
-"""Auto-homography from a CARLA camera's known intrinsics + extrinsics.
+"""Auto-homography from known camera intrinsics and extrinsics.
 
-Ported from the capstone analytics pipeline (setup_analytics.auto_calibrate_from_carla).
 Given a camera's world transform + image dims + FOV, projects 4 image points onto
-the ground plane (z = 0) and solves the pixel->world homography. This calibrates a
-TRaffic approach camera (CameraSpec) for vision-based speed/queue without any manual
-4-point picking.
-
-The camera->world rotation uses the `carla` module directly because CARLA's
-pitch/yaw/roll conventions are non-standard (positive pitch = nose up). A manual
-fallback is provided for environments without carla, but the carla path is the
-source of truth.
+the ground plane (z = 0) and solves the pixel->world homography.
 """
 
 from __future__ import annotations
@@ -32,28 +24,7 @@ def build_intrinsic_matrix(w: float, h: float, fov_deg: float) -> np.ndarray:
 
 
 def camera_to_world_rotation(pitch_deg: float, yaw_deg: float, roll_deg: float) -> np.ndarray:
-    """Rotation matrix converting CAMERA-frame vectors to WORLD frame.
-
-    Uses CARLA's API when available (always correct); falls back to manual math.
-    """
-    try:
-        import carla
-
-        tf = carla.Transform(
-            carla.Location(0, 0, 0),
-            carla.Rotation(pitch=pitch_deg, yaw=yaw_deg, roll=roll_deg),
-        )
-        fwd = tf.get_forward_vector()
-        right = tf.get_right_vector()
-        up = tf.get_up_vector()
-        return np.array([
-            [fwd.x, right.x, up.x],
-            [fwd.y, right.y, up.y],
-            [fwd.z, right.z, up.z],
-        ])
-    except ImportError:
-        pass
-
+    """Rotation matrix converting camera-frame vectors to world frame."""
     p = math.radians(pitch_deg)
     y = math.radians(yaw_deg)
     r = math.radians(roll_deg)
@@ -123,7 +94,7 @@ def homography_from_params(
 
 
 def homography_from_cameraspec(spec) -> Optional[np.ndarray]:
-    """Convenience: homography for a carla_bridge.CameraSpec (or any object with
+    """Convenience: homography for any camera spec object with
     x/y/z/pitch/yaw/roll/width/height/fov attributes)."""
     return homography_from_params(
         spec.x, spec.y, spec.z, spec.pitch, spec.yaw,

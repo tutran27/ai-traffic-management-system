@@ -149,6 +149,20 @@ class ActuatedController:
             out.setdefault(d, out.get(d, 0.0))
         return out
 
+    def get_targets(self, intersection_id: str) -> Dict[str, Dict[str, float]]:
+        """Return per-direction base, current target, and delta in seconds."""
+        base_map = self.base_green_by_dir
+        tr = self._trackers.get(intersection_id)
+        target_map = self._targets_by_dir(tr) if tr is not None else base_map
+        return {
+            d: {
+                "base": round(base_map.get(d, 0.0), 1),
+                "target": round(target_map.get(d, 0.0), 1),
+                "delta": round(target_map.get(d, 0.0) - base_map.get(d, 0.0), 1),
+            }
+            for d in DIRECTIONS
+        }
+
     def _ensure(self, tl_id: str) -> IntersectionTracker:
         if tl_id not in self._trackers:
             self._trackers[tl_id] = IntersectionTracker(self.plan)

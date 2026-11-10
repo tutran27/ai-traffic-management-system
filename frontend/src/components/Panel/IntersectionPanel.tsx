@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { useTrafficStore } from "@/store/trafficStore";
 import PanelLive    from "./PanelLive";
-import PanelCameras from "./PanelCameras";
 import PanelPolicy  from "./PanelPolicy";
 
-type Tab = "live" | "cameras" | "policy";
+type Tab = "live" | "policy";
 
 const POSITION_LABEL: Record<string, string> = {
   A1: "Top arterial · west",
@@ -17,16 +16,16 @@ const POSITION_LABEL: Record<string, string> = {
   C0: "Bottom arterial · east",
 };
 
-function phaseToDir(phaseIndex: number): { dir: string; sub: "G" | "y" | "r" } {
+function phaseToDir(phaseIndex: number): { dir: string; isNS: boolean; sub: "G" | "y" | "r" } {
   const group = Math.floor(phaseIndex / 3) % 4;
   const sub   = phaseIndex % 3;
-  const dir   = ["N", "E", "S", "W"][group];
-  return { dir, sub: sub === 0 ? "G" : sub === 1 ? "y" : "r" };
+  const isNS  = group === 0 || group === 2;
+  const dir   = isNS ? "North - South" : "East - West";
+  return { dir, isNS, sub: sub === 0 ? "G" : sub === 1 ? "y" : "r" };
 }
 
 const PHASE_COLORS = { G: "#22c55e", y: "#eab308", r: "#ef4444" };
 const PHASE_NAMES  = { G: "green", y: "yellow", r: "red" };
-const DIR_FULL     = { N: "North", E: "East", S: "South", W: "West" } as Record<string, string>;
 
 export default function IntersectionPanel() {
   const selectedId         = useTrafficStore((s) => s.selectedIntersection);
@@ -68,31 +67,70 @@ export default function IntersectionPanel() {
           </button>
         </div>
 
-        {/* Phase indicator */}
+        {/* Phase indicator with 4-way direction breakdown */}
         {intersection && (() => {
-          const { dir, sub } = phaseToDir(intersection.phase_index);
+          const { dir, isNS, sub } = phaseToDir(intersection.phase_index);
           const color        = PHASE_COLORS[sub];
           const remaining    = Math.max(0, Math.round(intersection.phase_remaining_s));
+          const isArterial   = !intersection.id.startsWith("E") && !intersection.id.startsWith("W");
+
+          const dirs = [
+            { key: "N", label: "North", isGroupActive: isNS },
+            { key: "S", label: "South", isGroupActive: isNS },
+            { key: "E", label: "East",  isGroupActive: !isNS },
+            { key: "W", label: "West",  isGroupActive: !isNS },
+          ];
+
           return (
-            <div className="flex-shrink-0 mx-3.5 mb-0 bg-[#1f2937] rounded-lg px-3 py-2
-                            flex items-center gap-2.5">
-              <div
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ background: color, boxShadow: `0 0 8px ${color}` }}
-              />
-              <span className="text-xs text-gray-300 flex-1">
-                {DIR_FULL[dir] ?? dir} {PHASE_NAMES[sub]}
-              </span>
-              <span className="text-sm font-bold font-mono" style={{ color }}>
-                {remaining}s
-              </span>
+            <div className="flex-shrink-0 mx-3.5 mb-0 flex flex-col gap-1.5">
+              <div className="bg-[#1f2937] rounded-lg px-3 py-2 flex items-center gap-2.5">
+                <div
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ background: color, boxShadow: `0 0 8px ${color}` }}
+                />
+                <span className="text-xs text-gray-300 flex-1">
+                  Active: <strong className="text-white">{dir}</strong> ({PHASE_NAMES[sub]})
+                </span>
+                <span className="text-sm font-bold font-mono" style={{ color }}>
+                  {remaining}s
+                </span>
+              </div>
+
+              {isArterial && (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {dirs.map((d) => {
+                    const isActive = d.isGroupActive;
+                    const dColor = isActive ? color : "#ef4444";
+                    const statusLabel = isActive ? (sub === "G" ? "GREEN" : sub === "y" ? "YELLOW" : "RED") : "RED";
+                    return (
+                      <div
+                        key={d.key}
+                        className={`rounded px-1.5 py-1 flex flex-col items-center border ${
+                          isActive ? "border-green-500/40 bg-green-500/10" : "border-red-500/20 bg-red-500/5"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: dColor }}
+                          />
+                          <span className="text-[10px] font-bold text-gray-300">{d.key} ({d.label})</span>
+                        </div>
+                        <span className="text-[8.5px] font-mono mt-0.5 font-semibold" style={{ color: dColor }}>
+                          {statusLabel} · {remaining}s
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })()}
 
         {/* Tabs */}
         <div className="flex-shrink-0 flex border-b border-gray-800 mt-2.5">
-          {(["live", "cameras", "policy"] as Tab[]).map((tab) => (
+          {(["live", "policy"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -102,7 +140,7 @@ export default function IntersectionPanel() {
                   : "text-gray-600 border-transparent hover:text-gray-400"
               }`}
             >
-              {tab === "live" ? "Live" : tab === "cameras" ? "Cameras" : "Policy"}
+              {tab === "live" ? "Live" : "Policy"}
             </button>
           ))}
         </div>
@@ -111,14 +149,8 @@ export default function IntersectionPanel() {
         <div className="flex-1 overflow-y-auto p-3.5">
           {isOpen && selectedId && (
             <>
-              {activeTab === "live"    && (
-                <PanelLive
-                  intersectionId={selectedId}
-                  onSwitchToCamera={() => setActiveTab("cameras")}
-                />
-              )}
-              {activeTab === "cameras" && <PanelCameras intersectionId={selectedId} />}
-              {activeTab === "policy"  && <PanelPolicy  intersectionId={selectedId} />}
+              {activeTab === "live"   && <PanelLive intersectionId={selectedId} />}
+              {activeTab === "policy" && <PanelPolicy intersectionId={selectedId} />}
             </>
           )}
         </div>

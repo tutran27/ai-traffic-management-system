@@ -1,4 +1,4 @@
-"""Smoke tests — FastAPI app loads without SUMO or CARLA running."""
+"""Smoke tests — FastAPI app loads without SUMO running."""
 
 from __future__ import annotations
 

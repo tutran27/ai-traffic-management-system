@@ -20,9 +20,7 @@ export function useWebSocket() {
     if (connected.current) return;
     connected.current = true;
 
-    // Seed status + mode from backend so the dashboard reflects an already-running
-    // sim. Poll periodically so the GridMap layout swaps when the user starts/stops
-    // a CARLA-mode run from the controls.
+    // Seed status + mode from backend so the dashboard reflects an already-running sim.
     const pollStatus = () => {
       api
         .getSimStatus()

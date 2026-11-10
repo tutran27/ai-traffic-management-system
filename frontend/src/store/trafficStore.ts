@@ -94,29 +94,35 @@ export const useTrafficStore = create<TrafficStore>((set) => ({
   lastStartedConfig: null,
 
   updateFromTick: (data) =>
-    set((state) => ({
-      tick: data.tick,
-      simTime: data.sim_time,
-      intersections: data.intersections,
-      vehicles: data.vehicles,
-      metrics: data.metrics,
-      emergencyVehicles: data.emergency.active,
-      metricsHistory: [
-        ...state.metricsHistory.slice(-(MAX_HISTORY - 1)),
-        {
-          tick: data.tick,
-          sim_time: data.sim_time,
-          total_vehicles: data.metrics.total_vehicles,
-          total_completed: data.metrics.total_completed,
-          avg_delay_s: data.metrics.avg_delay_s,
-          throughput_veh_per_min: data.metrics.throughput_veh_per_min,
-          total_halting: data.metrics.total_halting,
-          avg_control_delay_s: data.metrics.avg_control_delay_s,
-          avg_trip_time_s: data.metrics.avg_trip_time_s,
-          completed_trips: data.metrics.completed_trips,
-        },
-      ],
-    })),
+    set((state) => {
+      // Throttle history updates to every 5 ticks (~2 Hz) to reduce Recharts heavy path recalculation
+      const shouldUpdateHistory = data.tick <= 5 || data.tick % 5 === 0;
+      return {
+        tick: data.tick,
+        simTime: data.sim_time,
+        intersections: data.intersections,
+        vehicles: data.vehicles,
+        metrics: data.metrics,
+        emergencyVehicles: data.emergency.active,
+        metricsHistory: shouldUpdateHistory
+          ? [
+              ...state.metricsHistory.slice(-(MAX_HISTORY - 1)),
+              {
+                tick: data.tick,
+                sim_time: data.sim_time,
+                total_vehicles: data.metrics.total_vehicles,
+                total_completed: data.metrics.total_completed,
+                avg_delay_s: data.metrics.avg_delay_s,
+                throughput_veh_per_min: data.metrics.throughput_veh_per_min,
+                total_halting: data.metrics.total_halting,
+                avg_control_delay_s: data.metrics.avg_control_delay_s,
+                avg_trip_time_s: data.metrics.avg_trip_time_s,
+                completed_trips: data.metrics.completed_trips,
+              },
+            ]
+          : state.metricsHistory,
+      };
+    }),
 
   setStatus: (status) => set({ status }),
   setMode: (mode) => set({ mode }),

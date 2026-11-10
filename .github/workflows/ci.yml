@@ -25,7 +25,6 @@ jobs:
           pip install -e packages/adaptive-policy
           pip install -e packages/sumo-engine
           pip install -e packages/cv-pipeline
-          pip install -e packages/carla-bridge
           pip install -e backend
 
       - name: Run tests

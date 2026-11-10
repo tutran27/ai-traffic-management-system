@@ -1,80 +1,118 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.egg-info/
-dist/
+
+# Distribution / packaging
 build/
+dist/
+*.egg-info/
 *.egg
 .eggs/
 *.whl
-venv/
+
+# Virtual Environments
 .venv/
+venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Testing, Linting & Coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.eslintcache
+.ipynb_checkpoints/
 
-# Environment
+# Environment Variables & Secrets
 .env
 .env.local
 .env.*.local
+*.env
+!*.env.example
+*.pem
+*.key
 
-# SUMO
+# Node / Next.js
+node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.turbo/
+.vercel/
+
+# SUMO & Simulation Logs / Outputs
 *.log
 *.xml.bak
+*.tripinfo.xml
+*.summary.xml
+*.queue.xml
 
-# CV Models (use git-lfs for large files)
+# Computer Vision & Ultralytics
+runs/
+packages/cv-pipeline/runs/
 packages/cv-pipeline/models/*.pt
 packages/cv-pipeline/models/*.pth
 packages/cv-pipeline/models/*.onnx
 packages/cv-pipeline/models/*.bin
 !packages/cv-pipeline/models/.gitkeep
-# Custom YOLOv11m weights committed directly (39 MB, under GitHub's 100 MB limit)
+# Custom YOLOv11m weights committed directly (~39 MB)
 !packages/cv-pipeline/models/best.pt
 
-# Node / Next.js
-node_modules/
-frontend/.next/
-frontend/out/
-frontend/.env*.local
+# Large Video / Media Files (ignore raw test footage, keep docs assets)
+*.mp4
+*.avi
+*.mov
+*.mkv
+!docs/**
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-
-# Misc
-*.bak
-*.tmp
-
-# AI dev tooling (Claude Code, Superpowers)
-.claude/
-.superpowers/
-docs/superpowers/
-
-# TypeScript incremental build cache
-frontend/tsconfig.tsbuildinfo
-
-# Session / iteration notes (not for the public repo)
-SESSION_LOG*.txt
-session_progress.txt
-dashboard_iteration_*.txt
-Running inst.txt
-CLAUDE.md
-
-# Capstone deliverables (host separately — LinkedIn, Drive, etc.)
-*.pdf
+# Slide Previews & Temporary Build / Test Folders
+temp_*/
+*_preview/
+*_slides_preview/
+temp_formula_test/
+temp_formulas_*/
+temp_test_formulas/
 *.pptx
 
-# macOS duplicate filenames
-* copy.*
+# Generated Evaluation Artifacts & Local DB
+artifacts/
+*.sqlite
+*.sqlite3
+*.db
+
+# AI Agents & Assistants workspace configs
+.agents/
+.gemini/
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Misc temporary & backup files
+*.bak
+*.tmp

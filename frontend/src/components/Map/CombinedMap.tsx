@@ -1,5 +1,6 @@
 "use client";
 
+import React, { memo } from "react";
 import { useTrafficStore } from "@/store/trafficStore";
 import type { IntersectionState, VehicleState } from "@/lib/types";
 import IntersectionNode from "./IntersectionNode";

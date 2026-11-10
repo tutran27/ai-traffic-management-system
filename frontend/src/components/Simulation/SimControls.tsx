@@ -11,18 +11,15 @@ import {
   policiesForNetwork,
 } from "@/lib/policies";
 import {
-  CarlaCarsField,
   CarsField,
   DominantField,
   ProfileField,
 } from "./Fields";
 import type {
-  CameraStatus,
   DemandProfile,
   DominantDirection,
   PolicyType,
   PolicyVariant,
-  SimulationMode,
 } from "@/lib/types";
 
 const ACTIVE_VARIANT_KEY = "traffic.activeVariantName";
@@ -65,7 +62,6 @@ export default function SimControls() {
   const network     = useTrafficStore((s) => s.network);
   const setNetwork  = useTrafficStore((s) => s.setNetwork);
 
-  const [mode,      setMode]      = useState<SimulationMode>("sumo");
   const [policy,    setPolicy]    = useState<PolicyType>("actuated");
   // Combined-network only: independent ramp meter policy. Ignored when
   // network is arterial or highway_metered.
@@ -74,21 +70,11 @@ export default function SimControls() {
   const [dominant,  setDominant]  = useState<DominantDirection>("EW");
   const [cars,      setCars]      = useState<number>(5500);
   const [gui,       setGui]       = useState<boolean>(false);
-  const [carlaCars, setCarlaCars] = useState<number>(80);
-  const [carlaStatus, setCarlaStatus] = useState<CameraStatus | null>(null);
   // Saved policy variants (CRUD lives on /policy). User picks one from the
   // dropdown below; selection persists via localStorage so it survives
   // navigation and re-renders.
   const [variants, setVariants] = useState<PolicyVariant[]>([]);
   const [activeName, setActiveName] = useState<string>("");
-
-  useEffect(() => {
-    let cancelled = false;
-    api.getCameraStatus()
-      .then((s) => { if (!cancelled) setCarlaStatus(s as CameraStatus); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
 
   // Pull saved variants on mount, every focus, and whenever localStorage
   // changes (the /policy page may have saved/deleted one).
@@ -161,52 +147,37 @@ export default function SimControls() {
   // The picker is only useful when a tunable policy is selected.
   const showVariantPicker = policy === "ramp_alinea" || policy === "actuated";
 
-  const isIdle       = status === "idle" || status === "stopped";
-  const carlaEnabled = carlaStatus?.connected === true;
+  const isIdle = status === "idle" || status === "stopped";
 
   const setLastStartedConfig = useTrafficStore((s) => s.setLastStartedConfig);
 
   const handleStart = () => {
-    if (mode === "carla") {
-      const cfg = {
-        mode: "carla" as const,
-        policy_type: policy,
-        demand_profile: profile,
-        dominant_direction: dominant,
-        total_vehicles: cars,
-        gui: false,
-        carla_vehicle_count: carlaCars,
-      };
-      setLastStartedConfig(cfg);
-      startSimulation(cfg);
-    } else {
-      // Variants land in different config keys per family. The backend
-      // dispatches on policy_type and reads the matching field.
-      let extra: Record<string, unknown> = {};
-      if (activeVariant && showVariantPicker) {
-        if (variantFamily === "highway") {
-          extra = { alinea_params: activeVariant.params };
-        } else {
-          extra = { policy_params: activeVariant.params };
-        }
+    // Variants land in different config keys per family. The backend
+    // dispatches on policy_type and reads the matching field.
+    let extra: Record<string, unknown> = {};
+    if (activeVariant && showVariantPicker) {
+      if (variantFamily === "highway") {
+        extra = { alinea_params: activeVariant.params };
+      } else {
+        extra = { policy_params: activeVariant.params };
       }
-      const cfg = {
-        mode: "sumo" as const,
-        network_type: network,
-        policy_type: policy,
-        demand_profile: profile,
-        dominant_direction: dominant,
-        total_vehicles: cars,
-        gui,
-        // Combined runs two controllers in tandem. policy_type drives the
-        // arterial half; ramp_policy_type drives the 4 meters. On other
-        // networks ramp_policy_type is silently ignored by the backend.
-        ...(isCombined ? { ramp_policy_type: rampPolicy } : {}),
-        ...extra,
-      };
-      setLastStartedConfig(cfg);
-      startSimulation(cfg);
     }
+    const cfg = {
+      mode: "sumo" as const,
+      network_type: network,
+      policy_type: policy,
+      demand_profile: profile,
+      dominant_direction: dominant,
+      total_vehicles: cars,
+      gui,
+      // Combined runs two controllers in tandem. policy_type drives the
+      // arterial half; ramp_policy_type drives the 4 meters. On other
+      // networks ramp_policy_type is silently ignored by the backend.
+      ...(isCombined ? { ramp_policy_type: rampPolicy } : {}),
+      ...extra,
+    };
+    setLastStartedConfig(cfg);
+    startSimulation(cfg);
   };
 
   const lastStartedConfig = useTrafficStore((s) => s.lastStartedConfig);
@@ -230,159 +201,135 @@ export default function SimControls() {
 
       {isIdle ? (
         <>
-          {/* Mode */}
+          {/* Network toggle */}
           <div>
-            <div className={LABEL}>Mode</div>
+            <div className={LABEL}>Network</div>
             <div className="flex gap-1.5 mt-1">
-              <ToggleBtn active={mode === "sumo"} onClick={() => setMode("sumo")}>SUMO</ToggleBtn>
-              <ToggleBtn
-                active={mode === "carla"}
-                disabled={!carlaEnabled}
-                onClick={() => setMode("carla")}
-              >
-                CARLA{!carlaEnabled ? " ✕" : ""}
+              <ToggleBtn active={network === "arterial"} onClick={() => setNetwork("arterial")}>
+                Arterial
+              </ToggleBtn>
+              <ToggleBtn active={network === "highway_metered"} onClick={() => setNetwork("highway_metered")}>
+                Highway
+              </ToggleBtn>
+              <ToggleBtn active={network === "combined"} onClick={() => setNetwork("combined")}>
+                Combined
               </ToggleBtn>
             </div>
-            {!carlaEnabled && (
-              <p className="text-[9px] text-gray-600 mt-1">Launch CarlaUE4 to enable CARLA mode.</p>
+            {isCombined && (
+              <p className="text-[9px] text-gray-600 mt-1">
+                Highway + 3×2 grid: freeway exits feed into signalized city streets.
+              </p>
             )}
           </div>
 
-          {mode === "sumo" ? (
-            <>
-              {/* Network toggle */}
-              <div>
-                <div className={LABEL}>Network</div>
-                <div className="flex gap-1.5 mt-1">
-                  <ToggleBtn active={network === "arterial"} onClick={() => setNetwork("arterial")}>
-                    Arterial
-                  </ToggleBtn>
-                  <ToggleBtn active={network === "highway_metered"} onClick={() => setNetwork("highway_metered")}>
-                    Highway
-                  </ToggleBtn>
-                  <ToggleBtn active={network === "combined"} onClick={() => setNetwork("combined")}>
-                    Combined
-                  </ToggleBtn>
-                </div>
-                {isCombined && (
-                  <p className="text-[9px] text-gray-600 mt-1">
-                    Highway + 3×2 grid: freeway exits feed into signalized city streets.
-                  </p>
-                )}
-              </div>
+          {/* Policy picker. On combined we show TWO pickers — one
+              per controller family. On other networks just one. */}
+          <div>
+            <div className={LABEL}>
+              {isCombined ? "Arterial policy" : "Policy"}
+            </div>
+            <div className="flex gap-1.5 mt-1 flex-wrap">
+              {(policiesForNetwork[network] ?? []).map((pt) => (
+                <ToggleBtn key={pt} active={policy === pt} onClick={() => setPolicy(pt)}>
+                  {POLICY_LABELS[pt]}
+                </ToggleBtn>
+              ))}
+            </div>
+            {isHighway && (
+              <p className="text-[9px] text-gray-600 mt-1">
+                Binary: speed-threshold v0. ALINEA: occupancy-feedback law.
+              </p>
+            )}
+          </div>
 
-              {/* Policy picker. On combined we show TWO pickers — one
-                  per controller family. On other networks just one. */}
-              <div>
-                <div className={LABEL}>
-                  {isCombined ? "Arterial policy" : "Policy"}
-                </div>
-                <div className="flex gap-1.5 mt-1 flex-wrap">
-                  {(policiesForNetwork[network] ?? []).map((pt) => (
-                    <ToggleBtn key={pt} active={policy === pt} onClick={() => setPolicy(pt)}>
-                      {POLICY_LABELS[pt]}
-                    </ToggleBtn>
-                  ))}
-                </div>
-                {isHighway && (
-                  <p className="text-[9px] text-gray-600 mt-1">
-                    Binary: speed-threshold v0. ALINEA: occupancy-feedback law.
-                  </p>
-                )}
-              </div>
-
-              {/* Second picker — ramp meters, only on combined. */}
-              {isCombined && (
-                <div>
-                  <div className={LABEL}>Ramp meter policy</div>
-                  <div className="flex gap-1.5 mt-1 flex-wrap">
-                    {COMBINED_RAMP_OPTIONS.map((pt) => (
-                      <ToggleBtn
-                        key={pt}
-                        active={rampPolicy === pt}
-                        onClick={() => setRampPolicy(pt)}
-                      >
-                        {pt === "fixed_time" ? "No metering" : POLICY_LABELS[pt]}
-                      </ToggleBtn>
-                    ))}
-                  </div>
-                  <p className="text-[9px] text-gray-600 mt-1">
-                    Arterial signals + ramp meters run independently in tandem.
-                  </p>
-                </div>
-              )}
-
-              {/* Profile + dominant only meaningful for arterial */}
-              {network === "arterial" && (
-                <>
-                  <ProfileField value={profile} onChange={setProfile} />
-                  {profile === "asym" && <DominantField value={dominant} onChange={setDominant} />}
-                </>
-              )}
-              <CarsField value={cars} onChange={setCars} />
-
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={gui}
-                  onChange={(e) => setGui(e.target.checked)}
-                  className="accent-blue-500"
-                />
-                Open SUMO window
-              </label>
-              {/* Variant picker — hidden entirely when there are no saved
-                  variants for this family (avoids a useless one-option
-                  dropdown). A tiny 'create variants →' link still hints
-                  that this is a feature. */}
-              {showVariantPicker && familyVariants.length > 0 && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className={LABEL}>
-                      Policy variant
-                      <span className="ml-1 normal-case tracking-normal text-gray-500">
-                        ({variantFamily})
-                      </span>
-                    </div>
-                    <Link
-                      href="/policy"
-                      className="text-blue-400 hover:text-blue-300 text-[10px]"
-                    >
-                      manage →
-                    </Link>
-                  </div>
-                  <select
-                    value={
-                      familyVariants.some((v) => v.name === activeName) ? activeName : ""
-                    }
-                    onChange={(e) => pickVariant(e.target.value)}
-                    className="w-full mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs font-mono text-gray-200"
+          {/* Second picker — ramp meters, only on combined. */}
+          {isCombined && (
+            <div>
+              <div className={LABEL}>Ramp meter policy</div>
+              <div className="flex gap-1.5 mt-1 flex-wrap">
+                {COMBINED_RAMP_OPTIONS.map((pt) => (
+                  <ToggleBtn
+                    key={pt}
+                    active={rampPolicy === pt}
+                    onClick={() => setRampPolicy(pt)}
                   >
-                    <option value="">— defaults —</option>
-                    {familyVariants.map((v) => (
-                      <option key={v.name} value={v.name}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
+                    {pt === "fixed_time" ? "No metering" : POLICY_LABELS[pt]}
+                  </ToggleBtn>
+                ))}
+              </div>
+              <p className="text-[9px] text-gray-600 mt-1">
+                Arterial signals + ramp meters run independently in tandem.
+              </p>
+            </div>
+          )}
+
+          {/* Profile + dominant only meaningful for arterial */}
+          {network === "arterial" && (
+            <>
+              <ProfileField value={profile} onChange={setProfile} />
+              {profile === "asym" && <DominantField value={dominant} onChange={setDominant} />}
+            </>
+          )}
+          <CarsField value={cars} onChange={setCars} />
+
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={gui}
+              onChange={(e) => setGui(e.target.checked)}
+              className="accent-blue-500"
+            />
+            Open SUMO window
+          </label>
+          {/* Variant picker — hidden entirely when there are no saved
+              variants for this family (avoids a useless one-option
+              dropdown). A tiny 'create variants →' link still hints
+              that this is a feature. */}
+          {showVariantPicker && familyVariants.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <div className={LABEL}>
+                  Policy variant
+                  <span className="ml-1 normal-case tracking-normal text-gray-500">
+                    ({variantFamily})
+                  </span>
                 </div>
-              )}
-              {showVariantPicker && familyVariants.length === 0 && (
                 <Link
                   href="/policy"
-                  className="text-[10px] text-gray-500 hover:text-blue-300"
+                  className="text-blue-400 hover:text-blue-300 text-[10px]"
                 >
-                  create policy variants →
+                  manage →
                 </Link>
-              )}
-            </>
-          ) : (
-            <CarlaCarsField value={carlaCars} onChange={setCarlaCars} />
+              </div>
+              <select
+                value={
+                  familyVariants.some((v) => v.name === activeName) ? activeName : ""
+                }
+                onChange={(e) => pickVariant(e.target.value)}
+                className="w-full mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs font-mono text-gray-200"
+              >
+                <option value="">— defaults —</option>
+                {familyVariants.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {showVariantPicker && familyVariants.length === 0 && (
+            <Link
+              href="/policy"
+              className="text-[10px] text-gray-500 hover:text-blue-300"
+            >
+              create policy variants →
+            </Link>
           )}
 
           <div className="flex gap-1.5">
             <button
               onClick={handleStart}
-              disabled={loading || (mode === "carla" && !carlaEnabled)}
+              disabled={loading}
               className="flex-1 bg-[#14532d] hover:bg-green-800 border border-green-900 text-green-300
                          rounded-md py-2 text-sm font-semibold disabled:opacity-50 transition-colors"
             >
