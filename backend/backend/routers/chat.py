@@ -3,22 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+
+from ..models.chat import ChatMessage, ChatRequest, ChatResponse
 
 router = APIRouter()
-
-
-class ChatMessage(BaseModel):
-    role: str   # "user" | "assistant"
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
-
-
-class ChatResponse(BaseModel):
-    reply: str
 
 
 def _build_system_prompt() -> str:

@@ -17,41 +17,16 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
 from shared.types import ActuatedPolicyParams, AlineaPolicyParams
 
+from ..models.policy import (
+    PolicyVariant,
+    SuggestRequest,
+    Suggestion,
+    SuggestResponse,
+)
 from ..services.db_service import db_service
-
-
-# --------------------------------------------------------------------- #
-# Models — params is loose (dict) so a single PolicyVariant carries either
-# family. The family field tags which schema applies.
-# --------------------------------------------------------------------- #
-
-class PolicyVariant(BaseModel):
-    name: str
-    params: dict
-    family: str = "arterial"   # "arterial" | "highway"
-    description: str = ""
-
-
-class SuggestRequest(BaseModel):
-    draft: dict
-    family: str = "arterial"
-    goal: str = "balanced"
-
-
-class Suggestion(BaseModel):
-    field: str
-    value: float
-    reason: str
-
-
-class SuggestResponse(BaseModel):
-    suggestions: list[Suggestion]
-    sample_size: int
-    note: str = ""
 
 
 router = APIRouter()

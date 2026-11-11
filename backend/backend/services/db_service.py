@@ -1,18 +1,21 @@
-"""Buffered Supabase writer.
+"""Buffered Supabase writer and database access service.
 
 Owns its own queue and flushes from a background task so the simulation
 tick loop never blocks on network I/O. If SUPABASE_URL or service-role
 key is unset, the service degrades to a no-op stub so the backend still
-boots for dev environments without a project.
+boots for dev environments without an active project.
 """
 
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import logging
 from typing import Any, Optional
 
 from shared.config import get_settings
+
+logger = logging.getLogger("backend.db")
 
 
 class DBService:
@@ -28,10 +31,15 @@ class DBService:
         self._flush_lock = asyncio.Lock()
 
         if not self._enabled:
-            print("[db] Supabase disabled (missing SUPABASE_URL or service-role key)")
+            logger.info("Supabase disabled (missing SUPABASE_URL or service-role key) - running in offline stub mode")
+
+    @property
+    def is_enabled(self) -> bool:
+        """Whether database persistence is configured and active."""
+        return self._enabled
 
     # --------------------------------------------------------------- #
-    # client access (lazy so import-time isn't blocking)
+    # Client access (lazy so import-time isn't blocking)
     # --------------------------------------------------------------- #
     def _get_client(self):
         if not self._enabled:
@@ -64,7 +72,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_insert)
         except Exception as e:
-            print(f"[db] start_run failed: {e}")
+            logger.error("start_run failed: %s", e)
             return None
 
     async def end_run(self, run_id: Optional[str], total_ticks: int, status: str = "completed") -> None:
@@ -84,7 +92,7 @@ class DBService:
         try:
             await asyncio.to_thread(_update)
         except Exception as e:
-            print(f"[db] end_run failed: {e}")
+            logger.error("end_run failed: %s", e)
 
     # --------------------------------------------------------------- #
     # metric buffering
@@ -123,7 +131,7 @@ class DBService:
         try:
             await asyncio.to_thread(_write)
         except Exception as e:
-            print(f"[db] flush failed ({len(inter)} inter, {len(glob)} global): {e}")
+            logger.error("flush failed (%d inter, %d global): %s", len(inter), len(glob), e)
 
     # --------------------------------------------------------------- #
     # experiments
@@ -144,7 +152,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_insert)
         except Exception as e:
-            print(f"[db] create_experiment failed: {e}")
+            logger.error("create_experiment failed: %s", e)
             return None
 
     async def upsert_experiment_run(
@@ -169,7 +177,7 @@ class DBService:
         try:
             await asyncio.to_thread(_upsert)
         except Exception as e:
-            print(f"[db] upsert_experiment_run failed: {e}")
+            logger.error("upsert_experiment_run failed: %s", e)
 
     async def update_experiment(self, experiment_id: str, **fields) -> None:
         if not self._enabled:
@@ -185,7 +193,7 @@ class DBService:
         try:
             await asyncio.to_thread(_update)
         except Exception as e:
-            print(f"[db] update_experiment failed: {e}")
+            logger.error("update_experiment failed: %s", e)
 
     # --------------------------------------------------------------- #
     # reads (for the /api/runs router + experiment hydration)
@@ -208,7 +216,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] list_runs failed: {e}")
+            logger.error("list_runs failed: %s", e)
             return []
 
     async def get_run(self, run_id: str) -> Optional[dict]:
@@ -229,7 +237,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] get_run failed: {e}")
+            logger.error("get_run failed: %s", e)
             return None
 
     async def get_run_intersection_metrics(self, run_id: str) -> list[dict]:
@@ -251,7 +259,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] get_run_intersection_metrics failed: {e}")
+            logger.error("get_run_intersection_metrics failed: %s", e)
             return []
 
     async def get_run_global_metrics(self, run_id: str) -> list[dict]:
@@ -272,7 +280,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] get_run_global_metrics failed: {e}")
+            logger.error("get_run_global_metrics failed: %s", e)
             return []
 
     async def list_experiments(self, limit: int = 50) -> list[dict]:
@@ -293,7 +301,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] list_experiments failed: {e}")
+            logger.error("list_experiments failed: %s", e)
             return []
 
     async def get_experiment(self, experiment_id: str) -> Optional[dict]:
@@ -321,7 +329,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] get_experiment failed: {e}")
+            logger.error("get_experiment failed: %s", e)
             return None
 
     # --------------------------------------------------------------- #
@@ -339,7 +347,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] list_variants failed: {e}")
+            logger.error("list_variants failed: %s", e)
             return []
 
     async def upsert_variant(
@@ -387,7 +395,7 @@ class DBService:
         try:
             await asyncio.to_thread(_upsert)
         except Exception as e:
-            print(f"[db] upsert_variant failed: {e}")
+            logger.error("upsert_variant failed: %s", e)
             raise
 
     async def delete_variant(self, name: str) -> None:
@@ -401,7 +409,7 @@ class DBService:
         try:
             await asyncio.to_thread(_delete)
         except Exception as e:
-            print(f"[db] delete_variant failed: {e}")
+            logger.error("delete_variant failed: %s", e)
             raise
 
     # --------------------------------------------------------------- #
@@ -459,7 +467,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] runs_for_variant failed: {e}")
+            logger.error("runs_for_variant failed: %s", e)
             return []
 
     async def list_recent_experiment_runs(self, limit: int = 30) -> list[dict]:
@@ -482,7 +490,7 @@ class DBService:
         try:
             return await asyncio.to_thread(_read)
         except Exception as e:
-            print(f"[db] list_recent_experiment_runs failed: {e}")
+            logger.error("list_recent_experiment_runs failed: %s", e)
             return []
 
 
