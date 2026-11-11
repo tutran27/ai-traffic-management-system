@@ -79,7 +79,7 @@ packages/cv-pipeline/models/*.bin
 *.mkv
 !docs/**
 
-# Slide Previews & Temporary Build / Test Folders
+# Slide Previews & Generator Scripts
 temp_*/
 *_preview/
 *_slides_preview/
@@ -87,6 +87,17 @@ temp_formula_test/
 temp_formulas_*/
 temp_test_formulas/
 *.pptx
+scripts/archive/
+scripts/build_pptx*.py
+scripts/patch_*.py
+
+# Large Datasets & Archives
+data/
+datasets/
+*.zip
+*.tar.gz
+*.7z
+*.rar
 
 # Generated Evaluation Artifacts & Local DB
 artifacts/
