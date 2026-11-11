@@ -42,11 +42,11 @@ app = FastAPI(
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[f"http://localhost:{p}" for p in range(3000, 3010)] +
-                  [f"http://127.0.0.1:{p}" for p in range(3000, 3010)],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_private_network=True,
 )
 
 # Register routers
